@@ -9,7 +9,8 @@ import {
   AlertTriangle,
   Package,
   Clock,
-  User
+  User,
+  Link2
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import PageHeader from '../components/PageHeader';
@@ -30,6 +31,8 @@ const EquipmentDetail = () => {
     getAccessoriesByEquipmentId,
     getMaintenanceByEquipmentId,
     getInventoryByEquipmentId,
+    getAccessoriesByInventoryId,
+    getMaintenanceByInventoryId,
     isMaintenanceOverdue,
     hasMissingAccessories
   } = useStore();
@@ -254,6 +257,12 @@ const EquipmentDetail = () => {
                         </div>
                         <StatusBadge status={acc.status} />
                       </div>
+                      {acc.sourceInventoryId && (
+                        <div className="mt-2 flex items-center gap-1 text-xs text-purple-600">
+                          <Link2 className="w-3 h-3" />
+                          <span>来源：盘点登记</span>
+                        </div>
+                      )}
                       <div className="mt-3 pt-3 border-t border-gray-200/50">
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-500">登记日期</span>
@@ -285,26 +294,34 @@ const EquipmentDetail = () => {
                   {maintenanceRecords.map((record) => (
                     <div
                       key={record.id}
-                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
+                      className="p-4 bg-gray-50 rounded-lg"
                     >
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
-                          <DollarSign className="w-5 h-5 text-emerald-600" />
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
+                            <DollarSign className="w-5 h-5 text-emerald-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900">
+                              {statusTextMap[record.type] || record.type}
+                            </p>
+                            <p className="text-sm text-gray-500">{record.description}</p>
+                            <p className="text-xs text-gray-400 mt-1">操作人：{record.operator}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium text-gray-900">
-                            {statusTextMap[record.type] || record.type}
+                        <div className="text-right">
+                          <p className="text-lg font-bold text-earth-600">
+                            {formatCurrency(record.cost)}
                           </p>
-                          <p className="text-sm text-gray-500">{record.description}</p>
-                          <p className="text-xs text-gray-400 mt-1">操作人：{record.operator}</p>
+                          <p className="text-sm text-gray-500">{formatDate(record.date)}</p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-lg font-bold text-earth-600">
-                          {formatCurrency(record.cost)}
-                        </p>
-                        <p className="text-sm text-gray-500">{formatDate(record.date)}</p>
-                      </div>
+                      {record.sourceInventoryId && (
+                        <div className="mt-2 flex items-center gap-1 text-xs text-purple-600">
+                          <Link2 className="w-3 h-3" />
+                          <span>来源：盘点登记</span>
+                        </div>
+                      )}
                     </div>
                   ))}
                   <div className="flex justify-between items-center p-4 bg-forest-50 rounded-lg mt-4">
@@ -323,34 +340,68 @@ const EquipmentDetail = () => {
               {inventoryRecords.length === 0 ? (
                 <EmptyState title="暂无盘点记录" description="该装备还没有盘点记录" />
               ) : (
-                <div className="space-y-3">
-                  {inventoryRecords.map((record) => (
-                    <div
-                      key={record.id}
-                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-                          <ClipboardList className="w-5 h-5 text-purple-600" />
+                <div className="space-y-4">
+                  {inventoryRecords.map((record) => {
+                    const relatedAcc = getAccessoriesByInventoryId(record.id);
+                    const relatedMaint = getMaintenanceByInventoryId(record.id);
+                    const hasRelations = relatedAcc.length > 0 || relatedMaint.length > 0;
+                    
+                    return (
+                      <div
+                        key={record.id}
+                        className="p-4 bg-gray-50 rounded-lg"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                              <ClipboardList className="w-5 h-5 text-purple-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-gray-900">
+                                盘点 - {formatDate(record.checkDate)}
+                              </p>
+                              <p className="text-sm text-gray-500">盘点人：{record.checker}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-6">
+                            <div className="text-right">
+                              <p className="text-sm text-gray-500">账面 / 实盘</p>
+                              <p className={`font-medium ${record.expectedCount !== record.actualCount ? 'text-red-600' : 'text-gray-900'}`}>
+                                {record.expectedCount} / {record.actualCount}
+                              </p>
+                            </div>
+                            <StatusBadge status={record.status} />
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium text-gray-900">
-                            盘点 - {formatDate(record.checkDate)}
+                        
+                        {record.notes && (
+                          <p className="text-sm text-gray-500 mt-3 pt-3 border-t border-gray-200/50">
+                            备注：{record.notes}
                           </p>
-                          <p className="text-sm text-gray-500">盘点人：{record.checker}</p>
-                        </div>
+                        )}
+                        
+                        {hasRelations && (
+                          <div className="mt-3 pt-3 border-t border-gray-200/50">
+                            <p className="text-xs text-gray-500 mb-2">关联记录：</p>
+                            <div className="flex flex-wrap gap-2">
+                              {relatedAcc.length > 0 && (
+                                <span className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-earth-100 text-earth-700 rounded-full">
+                                  <Wrench className="w-3 h-3" />
+                                  配件问题 {relatedAcc.length} 项
+                                </span>
+                              )}
+                              {relatedMaint.length > 0 && (
+                                <span className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded-full">
+                                  <DollarSign className="w-3 h-3" />
+                                  维护记录 {relatedMaint.length} 条
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <div className="flex items-center gap-6">
-                        <div className="text-right">
-                          <p className="text-sm text-gray-500">账面 / 实盘</p>
-                          <p className={`font-medium ${record.expectedCount !== record.actualCount ? 'text-red-600' : 'text-gray-900'}`}>
-                            {record.expectedCount} / {record.actualCount}
-                          </p>
-                        </div>
-                        <StatusBadge status={record.status} />
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

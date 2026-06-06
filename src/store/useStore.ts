@@ -14,6 +14,32 @@ import {
   mockInventory 
 } from '../data/mockData';
 
+interface InventoryAccessoryItem {
+  name: string;
+  type: 'missing' | 'damaged';
+  notes: string;
+}
+
+interface InventoryMaintenanceItem {
+  type: 'routine' | 'repair' | 'replacement';
+  description: string;
+  cost: number;
+  operator: string;
+}
+
+interface PerformInventoryData {
+  equipmentId: string;
+  checkDate: string;
+  expectedCount: number;
+  actualCount: number;
+  status: 'normal' | 'abnormal' | 'missing';
+  checker: string;
+  notes: string;
+  updateStock?: boolean;
+  accessories?: InventoryAccessoryItem[];
+  maintenance?: InventoryMaintenanceItem;
+}
+
 interface StoreState {
   equipments: Equipment[];
   rentals: RentalRecord[];
@@ -33,12 +59,19 @@ interface StoreState {
   addMaintenance: (maintenance: Omit<MaintenanceRecord, 'id'>) => void;
   
   addInventory: (inventory: Omit<InventoryRecord, 'id'>) => void;
+  performInventoryCheck: (data: PerformInventoryData) => {
+    inventoryId: string;
+    accessoryIds: string[];
+    maintenanceId?: string;
+  };
   
   getEquipmentById: (id: string) => Equipment | undefined;
   getRentalsByEquipmentId: (equipmentId: string) => RentalRecord[];
   getAccessoriesByEquipmentId: (equipmentId: string) => AccessoryRecord[];
   getMaintenanceByEquipmentId: (equipmentId: string) => MaintenanceRecord[];
   getInventoryByEquipmentId: (equipmentId: string) => InventoryRecord[];
+  getAccessoriesByInventoryId: (inventoryId: string) => AccessoryRecord[];
+  getMaintenanceByInventoryId: (inventoryId: string) => MaintenanceRecord[];
   
   hasMissingAccessories: (equipmentId: string) => boolean;
   isMaintenanceOverdue: (equipmentId: string) => boolean;
@@ -166,6 +199,109 @@ export const useStore = create<StoreState>((set, get) => ({
     }));
   },
   
+  performInventoryCheck: (data) => {
+    const inventoryId = generateId('inv');
+    const accessoryIds: string[] = [];
+    let maintenanceId: string | undefined;
+    
+    const newInventory: InventoryRecord = {
+      id: inventoryId,
+      equipmentId: data.equipmentId,
+      checkDate: data.checkDate,
+      expectedCount: data.expectedCount,
+      actualCount: data.actualCount,
+      status: data.status,
+      checker: data.checker,
+      notes: data.notes,
+      generatedAccessoryIds: [],
+      generatedMaintenanceIds: []
+    };
+    
+    const newAccessories: AccessoryRecord[] = [];
+    if (data.accessories && data.accessories.length > 0) {
+      data.accessories.forEach(acc => {
+        const accId = generateId('acc');
+        accessoryIds.push(accId);
+        newAccessories.push({
+          id: accId,
+          equipmentId: data.equipmentId,
+          name: acc.name,
+          type: acc.type,
+          status: 'pending',
+          reportedDate: data.checkDate,
+          notes: acc.notes,
+          sourceInventoryId: inventoryId
+        });
+      });
+      newInventory.generatedAccessoryIds = accessoryIds;
+    }
+    
+    let newMaintenance: MaintenanceRecord | undefined;
+    if (data.maintenance) {
+      maintenanceId = generateId('mt');
+      newMaintenance = {
+        id: maintenanceId,
+        equipmentId: data.equipmentId,
+        type: data.maintenance.type,
+        cost: data.maintenance.cost,
+        date: data.checkDate,
+        operator: data.maintenance.operator,
+        description: data.maintenance.description,
+        sourceInventoryId: inventoryId
+      };
+      newInventory.generatedMaintenanceIds = [maintenanceId];
+    }
+    
+    set((state) => {
+      let updatedEquipments = state.equipments;
+      
+      if (data.updateStock) {
+        updatedEquipments = state.equipments.map(eq => {
+          if (eq.id === data.equipmentId) {
+            let newStatus = eq.status;
+            let newAvailable = eq.availableStock;
+            
+            if (data.status === 'missing' || data.actualCount === 0) {
+              newStatus = 'out_of_stock';
+              newAvailable = 0;
+            } else if (data.status === 'abnormal') {
+              newAvailable = Math.max(0, data.actualCount);
+              if (newAvailable === 0) {
+                newStatus = 'out_of_stock';
+              }
+            }
+            
+            if (data.maintenance && data.maintenance.type === 'repair') {
+              newStatus = 'maintenance';
+            }
+            
+            return {
+              ...eq,
+              totalStock: data.expectedCount,
+              availableStock: newAvailable,
+              status: newStatus,
+              lastMaintenanceDate: data.maintenance ? data.checkDate : eq.lastMaintenanceDate
+            };
+          }
+          return eq;
+        });
+      }
+      
+      return {
+        inventory: [...state.inventory, newInventory],
+        accessories: [...state.accessories, ...newAccessories],
+        maintenance: newMaintenance ? [...state.maintenance, newMaintenance] : state.maintenance,
+        equipments: updatedEquipments
+      };
+    });
+    
+    return {
+      inventoryId,
+      accessoryIds,
+      maintenanceId
+    };
+  },
+  
   getEquipmentById: (id) => {
     return get().equipments.find(eq => eq.id === id);
   },
@@ -184,6 +320,14 @@ export const useStore = create<StoreState>((set, get) => ({
   
   getInventoryByEquipmentId: (equipmentId) => {
     return get().inventory.filter(i => i.equipmentId === equipmentId);
+  },
+  
+  getAccessoriesByInventoryId: (inventoryId) => {
+    return get().accessories.filter(a => a.sourceInventoryId === inventoryId);
+  },
+  
+  getMaintenanceByInventoryId: (inventoryId) => {
+    return get().maintenance.filter(m => m.sourceInventoryId === inventoryId);
   },
   
   hasMissingAccessories: (equipmentId) => {

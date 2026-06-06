@@ -35,6 +35,7 @@ export interface AccessoryRecord {
   reportedDate: string;
   replenishDate?: string;
   notes: string;
+  sourceInventoryId?: string;
 }
 
 export interface MaintenanceRecord {
@@ -45,6 +46,7 @@ export interface MaintenanceRecord {
   date: string;
   operator: string;
   description: string;
+  sourceInventoryId?: string;
 }
 
 export interface InventoryRecord {
@@ -56,6 +58,8 @@ export interface InventoryRecord {
   status: 'normal' | 'abnormal' | 'missing';
   checker: string;
   notes: string;
+  generatedAccessoryIds?: string[];
+  generatedMaintenanceIds?: string[];
 }
 
 export type EquipmentCategory = 
