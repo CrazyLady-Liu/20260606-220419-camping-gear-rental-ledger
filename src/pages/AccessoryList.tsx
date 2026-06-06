@@ -224,9 +224,13 @@ const AccessoryList = () => {
       <div className="card">
         {filteredAccessories.length === 0 ? (
           <EmptyState 
-            title="暂无配件记录" 
-            description={selectedEquipmentId ? "该装备暂无配件损耗记录" : "点击右上角按钮登记新的配件损耗"}
-            icon="inbox"
+            title="暂无匹配记录" 
+            description={
+              searchTerm || statusFilter || typeFilter || selectedEquipmentId
+                ? "当前筛选条件下没有找到配件记录，请尝试调整筛选条件"
+                : "点击右上角按钮登记新的配件损耗"
+            }
+            icon="search"
           />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">

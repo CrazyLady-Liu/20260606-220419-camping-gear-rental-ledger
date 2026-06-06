@@ -1,14 +1,14 @@
-import { Package, Inbox } from 'lucide-react';
+import { Package, Inbox, Search } from 'lucide-react';
 
 interface EmptyStateProps {
   title: string;
   description?: string;
-  icon?: 'package' | 'inbox';
+  icon?: 'package' | 'inbox' | 'search';
   action?: React.ReactNode;
 }
 
 const EmptyState = ({ title, description, icon = 'package', action }: EmptyStateProps) => {
-  const IconComponent = icon === 'package' ? Package : Inbox;
+  const IconComponent = icon === 'package' ? Package : icon === 'inbox' ? Inbox : Search;
   
   return (
     <div className="flex flex-col items-center justify-center py-12 px-4">

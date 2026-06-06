@@ -398,9 +398,13 @@ const InventoryList = () => {
       <div className="card">
         {filteredInventory.length === 0 ? (
           <EmptyState 
-            title="暂无盘点记录" 
-            description="点击右上角按钮新增盘点记录"
-            icon="inbox"
+            title="暂无匹配记录" 
+            description={
+              searchTerm || statusFilter || selectedEquipmentId
+                ? "当前筛选条件下没有找到盘点记录，请尝试调整筛选条件"
+                : "点击右上角按钮新增盘点记录"
+            }
+            icon="search"
           />
         ) : (
           <div className="divide-y divide-gray-100">

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, Eye, AlertTriangle, Wrench, Package } from 'lucide-react';
+import { Search, Filter, Eye, AlertTriangle, Wrench, Package, CheckCircle, XCircle, TrendingUp } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import PageHeader from '../components/PageHeader';
 import StatusBadge from '../components/StatusBadge';
@@ -29,12 +29,87 @@ const EquipmentList = () => {
     });
   }, [equipments, searchTerm, categoryFilter, statusFilter]);
 
+  const stats = useMemo(() => {
+    const data = filteredEquipments;
+    const total = data.length;
+    const normalCount = data.filter(eq => eq.status === 'normal').length;
+    const maintenanceCount = data.filter(eq => eq.status === 'maintenance').length;
+    const outOfStockCount = data.filter(eq => eq.status === 'out_of_stock').length;
+    const damagedCount = data.filter(eq => eq.status === 'damaged').length;
+    const totalStock = data.reduce((sum, eq) => sum + eq.totalStock, 0);
+    const availableStock = data.reduce((sum, eq) => sum + eq.availableStock, 0);
+    const totalRentalCount = data.reduce((sum, eq) => sum + eq.rentalCount, 0);
+    
+    const missingAccCount = data.filter(eq => hasMissingAccessories(eq.id)).length;
+    const overdueCount = data.filter(eq => isMaintenanceOverdue(eq.id)).length;
+    
+    return {
+      total,
+      normal: normalCount,
+      maintenance: maintenanceCount,
+      outOfStock: outOfStockCount,
+      damaged: damagedCount,
+      totalStock,
+      availableStock,
+      totalRentalCount,
+      missingAcc: missingAccCount,
+      overdue: overdueCount
+    };
+  }, [filteredEquipments, hasMissingAccessories, isMaintenanceOverdue]);
+
   return (
     <div>
       <PageHeader
         title="装备管理"
         description="管理所有露营装备的基础信息"
       />
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="card p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-forest-50 rounded-lg flex items-center justify-center">
+              <Package className="w-5 h-5 text-forest-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">装备总数</p>
+              <p className="text-xl font-bold text-gray-900">{stats.total}</p>
+            </div>
+          </div>
+        </div>
+        <div className="card p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center">
+              <CheckCircle className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">正常可用</p>
+              <p className="text-xl font-bold text-emerald-600">{stats.normal}</p>
+            </div>
+          </div>
+        </div>
+        <div className="card p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-amber-50 rounded-lg flex items-center justify-center">
+              <Wrench className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">维护中</p>
+              <p className="text-xl font-bold text-amber-600">{stats.maintenance + stats.damaged}</p>
+            </div>
+          </div>
+        </div>
+        <div className="card p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
+              <XCircle className="w-5 h-5 text-red-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">缺货</p>
+              <p className="text-xl font-bold text-red-600">{stats.outOfStock}</p>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div className="card p-4 mb-6">
         <div className="flex flex-wrap items-center gap-4">
@@ -200,9 +275,14 @@ const EquipmentList = () => {
         </div>
         
         {filteredEquipments.length === 0 && (
-          <div className="py-12 text-center">
-            <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500">没有找到匹配的装备</p>
+          <div className="py-16 text-center">
+            <Search className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500 font-medium">没有找到匹配的装备</p>
+            <p className="text-gray-400 text-sm mt-1">
+              {searchTerm || categoryFilter || statusFilter 
+                ? "请尝试调整筛选条件"
+                : "暂无装备数据"}
+            </p>
           </div>
         )}
       </div>

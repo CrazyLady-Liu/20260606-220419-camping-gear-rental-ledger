@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Search, DollarSign, Wrench, AlertTriangle } from 'lucide-react';
+import { Plus, Search, DollarSign, Wrench, TrendingUp, Trophy } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import PageHeader from '../components/PageHeader';
 import StatusBadge from '../components/StatusBadge';
@@ -63,10 +63,13 @@ const MaintenanceList = () => {
     const repairCount = data.filter(m => m.type === 'repair').length;
     const replacementCount = data.filter(m => m.type === 'replacement').length;
     const avgCost = data.length > 0 ? totalCost / data.length : 0;
+    const maxCost = data.length > 0 ? Math.max(...data.map(m => m.cost)) : 0;
     
-    const overdueCount = selectedEquipmentId 
-      ? (isMaintenanceOverdue(selectedEquipmentId) ? 1 : 0)
-      : equipments.filter(eq => isMaintenanceOverdue(eq.id)).length;
+    const thisMonthCount = data.filter(m => {
+      const mDate = new Date(m.date);
+      const now = new Date();
+      return mDate.getMonth() === now.getMonth() && mDate.getFullYear() === now.getFullYear();
+    }).length;
     
     return {
       total: data.length,
@@ -75,9 +78,10 @@ const MaintenanceList = () => {
       repair: repairCount,
       replacement: replacementCount,
       avgCost,
-      overdue: overdueCount
+      thisMonth: thisMonthCount,
+      maxCost
     };
-  }, [filteredMaintenance, selectedEquipmentId, equipments, isMaintenanceOverdue]);
+  }, [filteredMaintenance]);
 
   const costByType = useMemo(() => {
     const result: Record<string, number> = {
@@ -172,12 +176,12 @@ const MaintenanceList = () => {
         </div>
         <div className="card p-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-amber-50 rounded-lg flex items-center justify-center">
-              <AlertTriangle className="w-5 h-5 text-amber-600" />
+            <div className="w-10 h-10 bg-earth-50 rounded-lg flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 text-earth-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">维护超期</p>
-              <p className="text-xl font-bold text-amber-600">{stats.overdue} 件</p>
+              <p className="text-sm text-gray-500">本月维护</p>
+              <p className="text-xl font-bold text-earth-600">{stats.thisMonth} 次</p>
             </div>
           </div>
         </div>
@@ -270,9 +274,13 @@ const MaintenanceList = () => {
       <div className="card">
         {filteredMaintenance.length === 0 ? (
           <EmptyState 
-            title="暂无维护记录" 
-            description={selectedEquipmentId ? "该装备暂无维护记录" : "点击右上角按钮登记新的维护记录"}
-            icon="inbox"
+            title="暂无匹配记录" 
+            description={
+              searchTerm || typeFilter || selectedEquipmentId
+                ? "当前筛选条件下没有找到维护记录，请尝试调整筛选条件"
+                : "点击右上角按钮登记新的维护记录"
+            }
+            icon="search"
           />
         ) : (
           <div className="divide-y divide-gray-100">

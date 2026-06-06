@@ -212,9 +212,13 @@ const RentalList = () => {
       <div className="card">
         {filteredRentals.length === 0 ? (
           <EmptyState 
-            title="暂无租赁记录" 
-            description={selectedEquipmentId ? "该装备暂无租赁记录" : "点击右上角按钮添加新的租赁记录"}
-            icon="inbox"
+            title="暂无匹配记录" 
+            description={
+              searchTerm || statusFilter || selectedEquipmentId
+                ? "当前筛选条件下没有找到记录，请尝试调整筛选条件"
+                : "点击右上角按钮添加新的租赁记录"
+            }
+            icon="search"
           />
         ) : (
           <div className="divide-y divide-gray-100">
