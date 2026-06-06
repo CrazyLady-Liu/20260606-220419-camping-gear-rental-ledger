@@ -1,10 +1,12 @@
 import { useState, useMemo } from 'react';
-import { Plus, Search, Filter, Wrench, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Plus, Search, Wrench, AlertTriangle, CheckCircle, Package } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import PageHeader from '../components/PageHeader';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
 import EmptyState from '../components/EmptyState';
+import EquipmentSelector from '../components/EquipmentSelector';
+import EquipmentOverview from '../components/EquipmentOverview';
 import { formatDate, statusTextMap } from '../utils/format';
 
 const AccessoryList = () => {
@@ -14,11 +16,11 @@ const AccessoryList = () => {
     addAccessory, 
     updateAccessoryStatus,
     selectedEquipmentId,
-    setSelectedEquipmentId
+    setSelectedEquipmentId,
+    getAccessoriesByEquipmentId
   } = useStore();
   
   const [searchTerm, setSearchTerm] = useState('');
-  const [equipmentFilter, setEquipmentFilter] = useState(selectedEquipmentId || '');
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -39,20 +41,37 @@ const AccessoryList = () => {
   }, [equipments]);
 
   const filteredAccessories = useMemo(() => {
-    return accessories.filter(acc => {
+    const sourceAccessories = selectedEquipmentId
+      ? getAccessoriesByEquipmentId(selectedEquipmentId)
+      : accessories;
+    
+    return sourceAccessories.filter(acc => {
       const eqName = equipmentMap[acc.equipmentId] || '';
       const matchSearch = 
         acc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         eqName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         acc.notes.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchEquipment = !equipmentFilter || acc.equipmentId === equipmentFilter;
       const matchStatus = !statusFilter || acc.status === statusFilter;
       const matchType = !typeFilter || acc.type === typeFilter;
-      return matchSearch && matchEquipment && matchStatus && matchType;
+      return matchSearch && matchStatus && matchType;
     }).sort((a, b) => new Date(b.reportedDate).getTime() - new Date(a.reportedDate).getTime());
-  }, [accessories, equipmentMap, searchTerm, equipmentFilter, statusFilter, typeFilter]);
+  }, [accessories, equipmentMap, searchTerm, statusFilter, typeFilter, selectedEquipmentId, getAccessoriesByEquipmentId]);
 
-  const pendingCount = accessories.filter(a => a.status === 'pending').length;
+  const stats = useMemo(() => {
+    const data = filteredAccessories;
+    const pendingCount = data.filter(a => a.status === 'pending').length;
+    const replenishedCount = data.filter(a => a.status === 'replenished').length;
+    const missingCount = data.filter(a => a.type === 'missing').length;
+    const damagedCount = data.filter(a => a.type === 'damaged').length;
+    
+    return {
+      total: data.length,
+      pending: pendingCount,
+      replenished: replenishedCount,
+      missing: missingCount,
+      damaged: damagedCount
+    };
+  }, [filteredAccessories]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,39 +130,50 @@ const AccessoryList = () => {
         }
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      {selectedEquipmentId && <EquipmentOverview />}
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="card p-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-gray-50 rounded-lg flex items-center justify-center">
+              <Package className="w-5 h-5 text-gray-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">配件总数</p>
+              <p className="text-xl font-bold text-gray-900">{stats.total}</p>
+            </div>
+          </div>
+        </div>
+        <div className="card p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
               <AlertTriangle className="w-5 h-5 text-red-600" />
             </div>
             <div>
               <p className="text-sm text-gray-500">待补充</p>
-              <p className="text-2xl font-bold text-red-600">{pendingCount}</p>
+              <p className="text-xl font-bold text-red-600">{stats.pending}</p>
             </div>
           </div>
         </div>
         <div className="card p-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center">
               <CheckCircle className="w-5 h-5 text-emerald-600" />
             </div>
             <div>
               <p className="text-sm text-gray-500">已补充</p>
-              <p className="text-2xl font-bold text-emerald-600">
-                {accessories.filter(a => a.status === 'replenished').length}
-              </p>
+              <p className="text-xl font-bold text-emerald-600">{stats.replenished}</p>
             </div>
           </div>
         </div>
         <div className="card p-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Wrench className="w-5 h-5 text-blue-600" />
+            <div className="w-10 h-10 bg-amber-50 rounded-lg flex items-center justify-center">
+              <Wrench className="w-5 h-5 text-amber-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">配件记录总数</p>
-              <p className="text-2xl font-bold text-blue-600">{accessories.length}</p>
+              <p className="text-sm text-gray-500">损坏/缺失</p>
+              <p className="text-xl font-bold text-amber-600">{stats.damaged + stats.missing}</p>
             </div>
           </div>
         </div>
@@ -165,22 +195,7 @@ const AccessoryList = () => {
           </div>
           
           <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-gray-500" />
-              <select
-                value={equipmentFilter}
-                onChange={(e) => {
-                  setEquipmentFilter(e.target.value);
-                  setSelectedEquipmentId(e.target.value || null);
-                }}
-                className="select-field min-w-40"
-              >
-                <option value="">全部装备</option>
-                {equipments.map(eq => (
-                  <option key={eq.id} value={eq.id}>{eq.name}</option>
-                ))}
-              </select>
-            </div>
+            <EquipmentSelector className="min-w-48" />
             
             <select
               value={typeFilter}
@@ -210,7 +225,7 @@ const AccessoryList = () => {
         {filteredAccessories.length === 0 ? (
           <EmptyState 
             title="暂无配件记录" 
-            description="点击右上角按钮登记新的配件损耗"
+            description={selectedEquipmentId ? "该装备暂无配件损耗记录" : "点击右上角按钮登记新的配件损耗"}
             icon="inbox"
           />
         ) : (
@@ -285,6 +300,18 @@ const AccessoryList = () => {
 
       <div className="mt-4 text-sm text-gray-500">
         共 {filteredAccessories.length} 条记录
+        {selectedEquipmentId && (
+          <span className="ml-2">
+            （已筛选装备，
+            <button 
+              onClick={() => setSelectedEquipmentId(null)}
+              className="text-forest-600 hover:underline"
+            >
+              清除筛选
+            </button>
+            ）
+          </span>
+        )}
       </div>
 
       <Modal

@@ -1,12 +1,13 @@
 import { useState, useMemo } from 'react';
-import { Plus, Search, Filter, CalendarClock, User, ArrowRight } from 'lucide-react';
+import { Plus, Search, CalendarClock, User, ArrowRight, TrendingUp, Clock } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import PageHeader from '../components/PageHeader';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
 import EmptyState from '../components/EmptyState';
+import EquipmentSelector from '../components/EquipmentSelector';
+import EquipmentOverview from '../components/EquipmentOverview';
 import { formatDate, daysBetween } from '../utils/format';
-import { RentalRecord } from '../types';
 
 const RentalList = () => {
   const { 
@@ -15,11 +16,11 @@ const RentalList = () => {
     addRental, 
     updateRentalStatus,
     selectedEquipmentId,
-    setSelectedEquipmentId
+    setSelectedEquipmentId,
+    getRentalsByEquipmentId
   } = useStore();
   
   const [searchTerm, setSearchTerm] = useState('');
-  const [equipmentFilter, setEquipmentFilter] = useState(selectedEquipmentId || '');
   const [statusFilter, setStatusFilter] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({
@@ -44,17 +45,38 @@ const RentalList = () => {
   }, [equipments]);
 
   const filteredRentals = useMemo(() => {
-    return rentals.filter(rental => {
+    const sourceRentals = selectedEquipmentId 
+      ? getRentalsByEquipmentId(selectedEquipmentId)
+      : rentals;
+    
+    return sourceRentals.filter(rental => {
       const eqName = equipmentMap[rental.equipmentId] || '';
       const matchSearch = 
         rental.renterName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         eqName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         rental.purpose.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchEquipment = !equipmentFilter || rental.equipmentId === equipmentFilter;
       const matchStatus = !statusFilter || rental.status === statusFilter;
-      return matchSearch && matchEquipment && matchStatus;
+      return matchSearch && matchStatus;
     }).sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
-  }, [rentals, equipmentMap, searchTerm, equipmentFilter, statusFilter]);
+  }, [rentals, equipmentMap, searchTerm, statusFilter, selectedEquipmentId, getRentalsByEquipmentId]);
+
+  const stats = useMemo(() => {
+    const data = filteredRentals;
+    const activeCount = data.filter(r => r.status === 'active').length;
+    const returnedCount = data.filter(r => r.status === 'returned').length;
+    const overdueCount = data.filter(r => r.status === 'overdue').length;
+    const totalDays = data.reduce((sum, r) => sum + r.days, 0);
+    const avgDays = data.length > 0 ? (totalDays / data.length).toFixed(1) : '0';
+    
+    return {
+      total: data.length,
+      active: activeCount,
+      returned: returnedCount,
+      overdue: overdueCount,
+      totalDays,
+      avgDays
+    };
+  }, [filteredRentals]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,6 +128,55 @@ const RentalList = () => {
         }
       />
 
+      {selectedEquipmentId && <EquipmentOverview />}
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="card p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+              <CalendarClock className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">总记录数</p>
+              <p className="text-xl font-bold text-gray-900">{stats.total}</p>
+            </div>
+          </div>
+        </div>
+        <div className="card p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">租赁中</p>
+              <p className="text-xl font-bold text-emerald-600">{stats.active}</p>
+            </div>
+          </div>
+        </div>
+        <div className="card p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gray-50 rounded-lg flex items-center justify-center">
+              <Clock className="w-5 h-5 text-gray-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">累计天数</p>
+              <p className="text-xl font-bold text-gray-900">{stats.totalDays}</p>
+            </div>
+          </div>
+        </div>
+        <div className="card p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
+              <Clock className="w-5 h-5 text-red-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">已逾期</p>
+              <p className="text-xl font-bold text-red-600">{stats.overdue}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="card p-4 mb-6">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex-1 min-w-64">
@@ -122,22 +193,7 @@ const RentalList = () => {
           </div>
           
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-gray-500" />
-              <select
-                value={equipmentFilter}
-                onChange={(e) => {
-                  setEquipmentFilter(e.target.value);
-                  setSelectedEquipmentId(e.target.value || null);
-                }}
-                className="select-field min-w-40"
-              >
-                <option value="">全部装备</option>
-                {equipments.map(eq => (
-                  <option key={eq.id} value={eq.id}>{eq.name}</option>
-                ))}
-              </select>
-            </div>
+            <EquipmentSelector className="min-w-48" />
             
             <select
               value={statusFilter}
@@ -157,7 +213,7 @@ const RentalList = () => {
         {filteredRentals.length === 0 ? (
           <EmptyState 
             title="暂无租赁记录" 
-            description="点击右上角按钮添加新的租赁记录"
+            description={selectedEquipmentId ? "该装备暂无租赁记录" : "点击右上角按钮添加新的租赁记录"}
             icon="inbox"
           />
         ) : (
@@ -214,6 +270,18 @@ const RentalList = () => {
 
       <div className="mt-4 text-sm text-gray-500">
         共 {filteredRentals.length} 条记录
+        {selectedEquipmentId && (
+          <span className="ml-2">
+            （已筛选装备，
+            <button 
+              onClick={() => setSelectedEquipmentId(null)}
+              className="text-forest-600 hover:underline"
+            >
+              清除筛选
+            </button>
+            ）
+          </span>
+        )}
       </div>
 
       <Modal

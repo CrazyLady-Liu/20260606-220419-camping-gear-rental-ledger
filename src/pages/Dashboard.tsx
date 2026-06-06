@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Package, 
@@ -14,23 +15,64 @@ import {
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import PageHeader from '../components/PageHeader';
+import EquipmentSelector from '../components/EquipmentSelector';
+import EquipmentOverview from '../components/EquipmentOverview';
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { equipments, rentals, accessories, maintenance, isMaintenanceOverdue, hasMissingAccessories } = useStore();
+  const { 
+    equipments, 
+    rentals, 
+    accessories, 
+    maintenance, 
+    isMaintenanceOverdue, 
+    hasMissingAccessories,
+    selectedEquipmentId,
+    setSelectedEquipmentId,
+    getEquipmentById,
+    getRentalsByEquipmentId,
+    getAccessoriesByEquipmentId,
+    getMaintenanceByEquipmentId
+  } = useStore();
 
-  const totalEquipments = equipments.length;
-  const activeRentals = rentals.filter(r => r.status === 'active').length;
-  const thisMonthRentals = rentals.filter(r => {
+  const filteredEquipments = useMemo(() => {
+    if (selectedEquipmentId) {
+      const eq = getEquipmentById(selectedEquipmentId);
+      return eq ? [eq] : [];
+    }
+    return equipments;
+  }, [equipments, selectedEquipmentId, getEquipmentById]);
+
+  const filteredRentals = useMemo(() => {
+    return selectedEquipmentId 
+      ? getRentalsByEquipmentId(selectedEquipmentId)
+      : rentals;
+  }, [rentals, selectedEquipmentId, getRentalsByEquipmentId]);
+
+  const filteredAccessories = useMemo(() => {
+    return selectedEquipmentId 
+      ? getAccessoriesByEquipmentId(selectedEquipmentId)
+      : accessories;
+  }, [accessories, selectedEquipmentId, getAccessoriesByEquipmentId]);
+
+  const filteredMaintenance = useMemo(() => {
+    return selectedEquipmentId 
+      ? getMaintenanceByEquipmentId(selectedEquipmentId)
+      : maintenance;
+  }, [maintenance, selectedEquipmentId, getMaintenanceByEquipmentId]);
+
+  const totalEquipments = filteredEquipments.length;
+  const activeRentals = filteredRentals.filter(r => r.status === 'active').length;
+  const thisMonthRentals = filteredRentals.filter(r => {
     const rentalDate = new Date(r.startDate);
     const now = new Date();
     return rentalDate.getMonth() === now.getMonth() && rentalDate.getFullYear() === now.getFullYear();
   }).length;
   
-  const maintenanceOverdueCount = equipments.filter(eq => isMaintenanceOverdue(eq.id)).length;
-  const pendingAccessories = accessories.filter(a => a.status === 'pending').length;
-  const totalMaintenanceCost = maintenance.reduce((sum, m) => sum + m.cost, 0);
-  const outOfStockCount = equipments.filter(eq => eq.availableStock === 0).length;
+  const maintenanceOverdueCount = filteredEquipments.filter(eq => isMaintenanceOverdue(eq.id)).length;
+  const pendingAccessories = filteredAccessories.filter(a => a.status === 'pending').length;
+  const totalMaintenanceCost = filteredMaintenance.reduce((sum, m) => sum + m.cost, 0);
+  const outOfStockCount = filteredEquipments.filter(eq => eq.availableStock === 0).length;
 
   const statCards = [
     {
@@ -108,6 +150,25 @@ const Dashboard = () => {
         title="仪表板"
         description="露营装备租赁管理概览"
       />
+
+      {selectedEquipmentId && <EquipmentOverview />}
+
+      <div className="card p-4 mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-gray-700">装备筛选：</span>
+            <EquipmentSelector className="min-w-48" />
+          </div>
+          {selectedEquipmentId && (
+            <button
+              onClick={() => setSelectedEquipmentId(null)}
+              className="text-sm text-forest-600 hover:text-forest-700 hover:underline"
+            >
+              清除筛选，查看全部统计
+            </button>
+          )}
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {statCards.map((card, index) => {
@@ -228,7 +289,7 @@ const Dashboard = () => {
           <div className="mt-4 pt-4 border-t border-gray-100">
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">维护记录数</span>
-              <span className="font-medium text-gray-900">{maintenance.length} 条</span>
+              <span className="font-medium text-gray-900">{filteredMaintenance.length} 条</span>
             </div>
           </div>
         </div>

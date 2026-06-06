@@ -1,10 +1,12 @@
 import { useState, useMemo } from 'react';
-import { Plus, Search, Filter, DollarSign, Wrench, AlertTriangle } from 'lucide-react';
+import { Plus, Search, DollarSign, Wrench, AlertTriangle } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import PageHeader from '../components/PageHeader';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
 import EmptyState from '../components/EmptyState';
+import EquipmentSelector from '../components/EquipmentSelector';
+import EquipmentOverview from '../components/EquipmentOverview';
 import { formatDate, formatCurrency, statusTextMap } from '../utils/format';
 
 const MaintenanceList = () => {
@@ -14,11 +16,11 @@ const MaintenanceList = () => {
     addMaintenance,
     isMaintenanceOverdue,
     selectedEquipmentId,
-    setSelectedEquipmentId
+    setSelectedEquipmentId,
+    getMaintenanceByEquipmentId
   } = useStore();
   
   const [searchTerm, setSearchTerm] = useState('');
-  const [equipmentFilter, setEquipmentFilter] = useState(selectedEquipmentId || '');
   const [typeFilter, setTypeFilter] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({
@@ -38,26 +40,44 @@ const MaintenanceList = () => {
     return map;
   }, [equipments]);
 
-  const totalCost = useMemo(() => {
-    return maintenance.reduce((sum, m) => sum + m.cost, 0);
-  }, [maintenance]);
-
-  const overdueEquipments = useMemo(() => {
-    return equipments.filter(eq => isMaintenanceOverdue(eq.id)).length;
-  }, [equipments, isMaintenanceOverdue]);
-
   const filteredMaintenance = useMemo(() => {
-    return maintenance.filter(record => {
+    const sourceRecords = selectedEquipmentId
+      ? getMaintenanceByEquipmentId(selectedEquipmentId)
+      : maintenance;
+    
+    return sourceRecords.filter(record => {
       const eqName = equipmentMap[record.equipmentId] || '';
       const matchSearch = 
         record.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
         eqName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         record.operator.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchEquipment = !equipmentFilter || record.equipmentId === equipmentFilter;
       const matchType = !typeFilter || record.type === typeFilter;
-      return matchSearch && matchEquipment && matchType;
+      return matchSearch && matchType;
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [maintenance, equipmentMap, searchTerm, equipmentFilter, typeFilter]);
+  }, [maintenance, equipmentMap, searchTerm, typeFilter, selectedEquipmentId, getMaintenanceByEquipmentId]);
+
+  const stats = useMemo(() => {
+    const data = filteredMaintenance;
+    const totalCost = data.reduce((sum, m) => sum + m.cost, 0);
+    const routineCount = data.filter(m => m.type === 'routine').length;
+    const repairCount = data.filter(m => m.type === 'repair').length;
+    const replacementCount = data.filter(m => m.type === 'replacement').length;
+    const avgCost = data.length > 0 ? totalCost / data.length : 0;
+    
+    const overdueCount = selectedEquipmentId 
+      ? (isMaintenanceOverdue(selectedEquipmentId) ? 1 : 0)
+      : equipments.filter(eq => isMaintenanceOverdue(eq.id)).length;
+    
+    return {
+      total: data.length,
+      totalCost,
+      routine: routineCount,
+      repair: repairCount,
+      replacement: replacementCount,
+      avgCost,
+      overdue: overdueCount
+    };
+  }, [filteredMaintenance, selectedEquipmentId, equipments, isMaintenanceOverdue]);
 
   const costByType = useMemo(() => {
     const result: Record<string, number> = {
@@ -65,11 +85,11 @@ const MaintenanceList = () => {
       repair: 0,
       replacement: 0
     };
-    maintenance.forEach(m => {
+    filteredMaintenance.forEach(m => {
       result[m.type] = (result[m.type] || 0) + m.cost;
     });
     return result;
-  }, [maintenance]);
+  }, [filteredMaintenance]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -125,49 +145,51 @@ const MaintenanceList = () => {
         }
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      {selectedEquipmentId && <EquipmentOverview />}
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="card p-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center">
               <DollarSign className="w-5 h-5 text-emerald-600" />
             </div>
             <div>
               <p className="text-sm text-gray-500">累计费用</p>
-              <p className="text-xl font-bold text-emerald-600">{formatCurrency(totalCost)}</p>
+              <p className="text-xl font-bold text-emerald-600">{formatCurrency(stats.totalCost)}</p>
             </div>
           </div>
         </div>
         <div className="card p-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
               <Wrench className="w-5 h-5 text-blue-600" />
             </div>
             <div>
               <p className="text-sm text-gray-500">维护次数</p>
-              <p className="text-xl font-bold text-blue-600">{maintenance.length}</p>
+              <p className="text-xl font-bold text-blue-600">{stats.total}</p>
             </div>
           </div>
         </div>
         <div className="card p-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-amber-50 rounded-lg flex items-center justify-center">
               <AlertTriangle className="w-5 h-5 text-amber-600" />
             </div>
             <div>
               <p className="text-sm text-gray-500">维护超期</p>
-              <p className="text-xl font-bold text-amber-600">{overdueEquipments} 件</p>
+              <p className="text-xl font-bold text-amber-600">{stats.overdue} 件</p>
             </div>
           </div>
         </div>
         <div className="card p-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
               <DollarSign className="w-5 h-5 text-purple-600" />
             </div>
             <div>
               <p className="text-sm text-gray-500">单次均费</p>
               <p className="text-xl font-bold text-purple-600">
-                {maintenance.length > 0 ? formatCurrency(totalCost / maintenance.length) : '¥0'}
+                {stats.total > 0 ? formatCurrency(stats.avgCost) : '¥0'}
               </p>
             </div>
           </div>
@@ -185,6 +207,7 @@ const MaintenanceList = () => {
           <p className="text-2xl font-bold text-gray-900 mt-2">
             {formatCurrency(costByType.routine)}
           </p>
+          <p className="text-xs text-gray-400 mt-1">{stats.routine} 次</p>
         </div>
         <div className="card p-4">
           <div className="flex items-center justify-between">
@@ -196,6 +219,7 @@ const MaintenanceList = () => {
           <p className="text-2xl font-bold text-gray-900 mt-2">
             {formatCurrency(costByType.repair)}
           </p>
+          <p className="text-xs text-gray-400 mt-1">{stats.repair} 次</p>
         </div>
         <div className="card p-4">
           <div className="flex items-center justify-between">
@@ -207,6 +231,7 @@ const MaintenanceList = () => {
           <p className="text-2xl font-bold text-gray-900 mt-2">
             {formatCurrency(costByType.replacement)}
           </p>
+          <p className="text-xs text-gray-400 mt-1">{stats.replacement} 次</p>
         </div>
       </div>
 
@@ -226,22 +251,7 @@ const MaintenanceList = () => {
           </div>
           
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-gray-500" />
-              <select
-                value={equipmentFilter}
-                onChange={(e) => {
-                  setEquipmentFilter(e.target.value);
-                  setSelectedEquipmentId(e.target.value || null);
-                }}
-                className="select-field min-w-40"
-              >
-                <option value="">全部装备</option>
-                {equipments.map(eq => (
-                  <option key={eq.id} value={eq.id}>{eq.name}</option>
-                ))}
-              </select>
-            </div>
+            <EquipmentSelector className="min-w-48" />
             
             <select
               value={typeFilter}
@@ -261,7 +271,7 @@ const MaintenanceList = () => {
         {filteredMaintenance.length === 0 ? (
           <EmptyState 
             title="暂无维护记录" 
-            description="点击右上角按钮登记新的维护记录"
+            description={selectedEquipmentId ? "该装备暂无维护记录" : "点击右上角按钮登记新的维护记录"}
             icon="inbox"
           />
         ) : (
@@ -313,8 +323,20 @@ const MaintenanceList = () => {
           <span className="ml-4">
             合计费用：
             <span className="font-medium text-earth-600">
-              {formatCurrency(filteredMaintenance.reduce((sum, m) => sum + m.cost, 0))}
+              {formatCurrency(stats.totalCost)}
             </span>
+          </span>
+        )}
+        {selectedEquipmentId && (
+          <span className="ml-4">
+            （已筛选装备，
+            <button 
+              onClick={() => setSelectedEquipmentId(null)}
+              className="text-forest-600 hover:underline"
+            >
+              清除筛选
+            </button>
+            ）
           </span>
         )}
       </div>

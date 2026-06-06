@@ -1,10 +1,12 @@
 import { useState, useMemo } from 'react';
-import { Plus, Search, Filter, ClipboardList, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Search, ClipboardList, AlertTriangle, CheckCircle, XCircle, Package } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import PageHeader from '../components/PageHeader';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
 import EmptyState from '../components/EmptyState';
+import EquipmentSelector from '../components/EquipmentSelector';
+import EquipmentOverview from '../components/EquipmentOverview';
 import { formatDate, statusTextMap, isSameMonth } from '../utils/format';
 
 const InventoryList = () => {
@@ -14,11 +16,11 @@ const InventoryList = () => {
     addInventory,
     hasDuplicateInventoryThisMonth,
     selectedEquipmentId,
-    setSelectedEquipmentId
+    setSelectedEquipmentId,
+    getInventoryByEquipmentId
   } = useStore();
   
   const [searchTerm, setSearchTerm] = useState('');
-  const [equipmentFilter, setEquipmentFilter] = useState(selectedEquipmentId || '');
   const [statusFilter, setStatusFilter] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showWarning, setShowWarning] = useState(false);
@@ -54,21 +56,37 @@ const InventoryList = () => {
   };
 
   const filteredInventory = useMemo(() => {
-    return inventory.filter(record => {
+    const sourceInventory = selectedEquipmentId 
+      ? getInventoryByEquipmentId(selectedEquipmentId)
+      : inventory;
+    
+    return sourceInventory.filter(record => {
       const eqName = equipmentMap[record.equipmentId] || '';
       const matchSearch = 
         eqName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         record.checker.toLowerCase().includes(searchTerm.toLowerCase()) ||
         record.notes.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchEquipment = !equipmentFilter || record.equipmentId === equipmentFilter;
       const matchStatus = !statusFilter || record.status === statusFilter;
-      return matchSearch && matchEquipment && matchStatus;
+      return matchSearch && matchStatus;
     }).sort((a, b) => new Date(b.checkDate).getTime() - new Date(a.checkDate).getTime());
-  }, [inventory, equipmentMap, searchTerm, equipmentFilter, statusFilter]);
+  }, [inventory, equipmentMap, searchTerm, statusFilter, selectedEquipmentId, getInventoryByEquipmentId]);
 
-  const normalCount = inventory.filter(i => i.status === 'normal').length;
-  const abnormalCount = inventory.filter(i => i.status === 'abnormal').length;
-  const missingCount = inventory.filter(i => i.status === 'missing').length;
+  const stats = useMemo(() => {
+    const data = filteredInventory;
+    const normalCount = data.filter(i => i.status === 'normal').length;
+    const abnormalCount = data.filter(i => i.status === 'abnormal').length;
+    const missingCount = data.filter(i => i.status === 'missing').length;
+    const totalCount = data.length;
+    const normalRate = totalCount > 0 ? ((normalCount / totalCount) * 100).toFixed(1) : '0';
+    
+    return {
+      total: totalCount,
+      normal: normalCount,
+      abnormal: abnormalCount,
+      missing: missingCount,
+      normalRate
+    };
+  }, [filteredInventory]);
 
   const handleEquipmentChange = (equipmentId: string) => {
     const stock = getEquipmentStock(equipmentId);
@@ -170,37 +188,50 @@ const InventoryList = () => {
         }
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      {selectedEquipmentId && <EquipmentOverview />}
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="card p-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+              <Package className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">总盘点数</p>
+              <p className="text-xl font-bold text-gray-900">{stats.total}</p>
+            </div>
+          </div>
+        </div>
+        <div className="card p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center">
               <CheckCircle className="w-5 h-5 text-emerald-600" />
             </div>
             <div>
               <p className="text-sm text-gray-500">盘点正常</p>
-              <p className="text-2xl font-bold text-emerald-600">{normalCount}</p>
+              <p className="text-xl font-bold text-emerald-600">{stats.normal}</p>
             </div>
           </div>
         </div>
         <div className="card p-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-amber-50 rounded-lg flex items-center justify-center">
               <AlertTriangle className="w-5 h-5 text-amber-600" />
             </div>
             <div>
               <p className="text-sm text-gray-500">盘点异常</p>
-              <p className="text-2xl font-bold text-amber-600">{abnormalCount}</p>
+              <p className="text-xl font-bold text-amber-600">{stats.abnormal}</p>
             </div>
           </div>
         </div>
         <div className="card p-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
               <XCircle className="w-5 h-5 text-red-600" />
             </div>
             <div>
               <p className="text-sm text-gray-500">物品缺失</p>
-              <p className="text-2xl font-bold text-red-600">{missingCount}</p>
+              <p className="text-xl font-bold text-red-600">{stats.missing}</p>
             </div>
           </div>
         </div>
@@ -222,22 +253,7 @@ const InventoryList = () => {
           </div>
           
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-gray-500" />
-              <select
-                value={equipmentFilter}
-                onChange={(e) => {
-                  setEquipmentFilter(e.target.value);
-                  setSelectedEquipmentId(e.target.value || null);
-                }}
-                className="select-field min-w-40"
-              >
-                <option value="">全部装备</option>
-                {equipments.map(eq => (
-                  <option key={eq.id} value={eq.id}>{eq.name}</option>
-                ))}
-              </select>
-            </div>
+            <EquipmentSelector className="min-w-48" />
             
             <select
               value={statusFilter}
@@ -328,6 +344,18 @@ const InventoryList = () => {
 
       <div className="mt-4 text-sm text-gray-500">
         共 {filteredInventory.length} 条记录
+        {selectedEquipmentId && (
+          <span className="ml-2">
+            （已筛选装备，
+            <button 
+              onClick={() => setSelectedEquipmentId(null)}
+              className="text-forest-600 hover:underline"
+            >
+              清除筛选
+            </button>
+            ）
+          </span>
+        )}
       </div>
 
       <Modal

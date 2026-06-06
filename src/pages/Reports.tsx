@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import PageHeader from '../components/PageHeader';
+import EquipmentSelector from '../components/EquipmentSelector';
+import EquipmentOverview from '../components/EquipmentOverview';
 import { 
   exportEquipments, 
   exportRentals, 
@@ -24,7 +26,20 @@ import {
 import { formatCurrency, statusTextMap } from '../utils/format';
 
 const Reports = () => {
-  const { equipments, rentals, accessories, maintenance, inventory } = useStore();
+  const { 
+    equipments, 
+    rentals, 
+    accessories, 
+    maintenance, 
+    inventory,
+    selectedEquipmentId,
+    setSelectedEquipmentId,
+    getRentalsByEquipmentId,
+    getAccessoriesByEquipmentId,
+    getMaintenanceByEquipmentId,
+    getInventoryByEquipmentId,
+    getEquipmentById
+  } = useStore();
   const [exportMessage, setExportMessage] = useState<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null);
   const [exportType, setExportType] = useState('equipment');
 
@@ -36,11 +51,43 @@ const Reports = () => {
     return map;
   }, [equipments]);
 
+  const filteredEquipments = useMemo(() => {
+    if (selectedEquipmentId) {
+      const eq = getEquipmentById(selectedEquipmentId);
+      return eq ? [eq] : [];
+    }
+    return equipments;
+  }, [equipments, selectedEquipmentId, getEquipmentById]);
+
+  const filteredRentals = useMemo(() => {
+    return selectedEquipmentId 
+      ? getRentalsByEquipmentId(selectedEquipmentId)
+      : rentals;
+  }, [rentals, selectedEquipmentId, getRentalsByEquipmentId]);
+
+  const filteredAccessories = useMemo(() => {
+    return selectedEquipmentId 
+      ? getAccessoriesByEquipmentId(selectedEquipmentId)
+      : accessories;
+  }, [accessories, selectedEquipmentId, getAccessoriesByEquipmentId]);
+
+  const filteredMaintenance = useMemo(() => {
+    return selectedEquipmentId 
+      ? getMaintenanceByEquipmentId(selectedEquipmentId)
+      : maintenance;
+  }, [maintenance, selectedEquipmentId, getMaintenanceByEquipmentId]);
+
+  const filteredInventory = useMemo(() => {
+    return selectedEquipmentId 
+      ? getInventoryByEquipmentId(selectedEquipmentId)
+      : inventory;
+  }, [inventory, selectedEquipmentId, getInventoryByEquipmentId]);
+
   const topRentalEquipments = useMemo(() => {
-    return [...equipments]
+    return [...filteredEquipments]
       .sort((a, b) => b.rentalCount - a.rentalCount)
       .slice(0, 5);
-  }, [equipments]);
+  }, [filteredEquipments]);
 
   const maintenanceByType = useMemo(() => {
     const result: Record<string, number> = {
@@ -48,15 +95,15 @@ const Reports = () => {
       repair: 0,
       replacement: 0
     };
-    maintenance.forEach(m => {
+    filteredMaintenance.forEach(m => {
       result[m.type] = (result[m.type] || 0) + m.cost;
     });
     return result;
-  }, [maintenance]);
+  }, [filteredMaintenance]);
 
   const categoryStats = useMemo(() => {
     const stats: Record<string, { count: number; total: number }> = {};
-    equipments.forEach(eq => {
+    filteredEquipments.forEach(eq => {
       if (!stats[eq.category]) {
         stats[eq.category] = { count: 0, total: 0 };
       }
@@ -64,11 +111,11 @@ const Reports = () => {
       stats[eq.category].total += eq.totalStock;
     });
     return stats;
-  }, [equipments]);
+  }, [filteredEquipments]);
 
-  const totalMaintCost = maintenance.reduce((sum, m) => sum + m.cost, 0);
-  const totalRentalDays = rentals.reduce((sum, r) => sum + r.days, 0);
-  const pendingAccessories = accessories.filter(a => a.status === 'pending').length;
+  const totalMaintCost = filteredMaintenance.reduce((sum, m) => sum + m.cost, 0);
+  const totalRentalDays = filteredRentals.reduce((sum, r) => sum + r.days, 0);
+  const pendingAccessories = filteredAccessories.filter(a => a.status === 'pending').length;
 
   const showExportMessage = (type: 'success' | 'error' | 'warning', text: string) => {
     setExportMessage({ type, text });
@@ -80,19 +127,19 @@ const Reports = () => {
     
     switch (exportType) {
       case 'equipment':
-        result = exportEquipments(equipments);
+        result = exportEquipments(filteredEquipments);
         break;
       case 'rentals':
-        result = exportRentals(rentals, equipmentNames);
+        result = exportRentals(filteredRentals, equipmentNames);
         break;
       case 'maintenance':
-        result = exportMaintenance(maintenance, equipmentNames);
+        result = exportMaintenance(filteredMaintenance, equipmentNames);
         break;
       case 'accessories':
-        result = exportAccessories(accessories, equipmentNames);
+        result = exportAccessories(filteredAccessories, equipmentNames);
         break;
       case 'inventory':
-        result = exportInventory(inventory, equipmentNames);
+        result = exportInventory(filteredInventory, equipmentNames);
         break;
       default:
         result = { success: false, message: '未知的导出类型' };
@@ -108,15 +155,15 @@ const Reports = () => {
   const isExportEmpty = () => {
     switch (exportType) {
       case 'equipment':
-        return equipments.length === 0;
+        return filteredEquipments.length === 0;
       case 'rentals':
-        return rentals.length === 0;
+        return filteredRentals.length === 0;
       case 'maintenance':
-        return maintenance.length === 0;
+        return filteredMaintenance.length === 0;
       case 'accessories':
-        return accessories.length === 0;
+        return filteredAccessories.length === 0;
       case 'inventory':
-        return inventory.length === 0;
+        return filteredInventory.length === 0;
       default:
         return true;
     }
@@ -125,11 +172,11 @@ const Reports = () => {
   const maxRentalCount = Math.max(...topRentalEquipments.map(e => e.rentalCount), 1);
 
   const exportOptions = [
-    { value: 'equipment', label: '装备清单', icon: Package, count: equipments.length },
-    { value: 'rentals', label: '租赁记录', icon: CalendarClock, count: rentals.length },
-    { value: 'maintenance', label: '维护记录', icon: DollarSign, count: maintenance.length },
-    { value: 'accessories', label: '损耗配件', icon: Wrench, count: accessories.length },
-    { value: 'inventory', label: '盘点记录', icon: FileText, count: inventory.length },
+    { value: 'equipment', label: '装备清单', icon: Package, count: filteredEquipments.length },
+    { value: 'rentals', label: '租赁记录', icon: CalendarClock, count: filteredRentals.length },
+    { value: 'maintenance', label: '维护记录', icon: DollarSign, count: filteredMaintenance.length },
+    { value: 'accessories', label: '损耗配件', icon: Wrench, count: filteredAccessories.length },
+    { value: 'inventory', label: '盘点记录', icon: FileText, count: filteredInventory.length },
   ];
 
   return (
@@ -138,6 +185,25 @@ const Reports = () => {
         title="统计报表"
         description="数据统计分析与 CSV 导出"
       />
+
+      {selectedEquipmentId && <EquipmentOverview />}
+
+      <div className="card p-4 mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-gray-700">装备筛选：</span>
+            <EquipmentSelector className="min-w-48" />
+          </div>
+          {selectedEquipmentId && (
+            <button
+              onClick={() => setSelectedEquipmentId(null)}
+              className="text-sm text-forest-600 hover:text-forest-700 hover:underline"
+            >
+              清除筛选，查看全部统计
+            </button>
+          )}
+        </div>
+      </div>
 
       {exportMessage && (
         <div className={`mb-6 p-4 rounded-lg flex items-center gap-3 ${
@@ -222,7 +288,7 @@ const Reports = () => {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">装备种类</span>
-                <span className="text-lg font-bold text-gray-900">{equipments.length}</span>
+                <span className="text-lg font-bold text-gray-900">{filteredEquipments.length}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">累计租赁天数</span>
