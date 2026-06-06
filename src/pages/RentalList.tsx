@@ -23,6 +23,7 @@ const RentalList = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+
   const [formData, setFormData] = useState({
     equipmentId: '',
     renterName: '',
@@ -31,6 +32,18 @@ const RentalList = () => {
     purpose: '',
     notes: ''
   });
+
+  const openModal = () => {
+    setFormData({
+      equipmentId: selectedEquipmentId || '',
+      renterName: '',
+      startDate: '',
+      endDate: '',
+      purpose: '',
+      notes: ''
+    });
+    setIsModalOpen(true);
+  };
 
   const equipmentMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -119,7 +132,7 @@ const RentalList = () => {
         description="外出使用次数统计与租赁管理"
         actions={
           <button 
-            onClick={() => setIsModalOpen(true)}
+            onClick={openModal}
             className="btn-primary flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />

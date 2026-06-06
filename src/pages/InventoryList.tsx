@@ -68,24 +68,37 @@ const InventoryList = () => {
     accessories: AccessoryFormItem[];
     maintenance: MaintenanceFormData;
   } | null>(null);
+
+  const getDefaultFormData = () => {
+    const selectedEq = selectedEquipmentId 
+      ? equipments.find(e => e.id === selectedEquipmentId)
+      : null;
+    
+    return {
+      equipmentId: selectedEquipmentId || '',
+      checkDate: new Date().toISOString().split('T')[0],
+      expectedCount: selectedEq ? String(selectedEq.totalStock) : '',
+      actualCount: '',
+      checker: '',
+      notes: '',
+      updateStock: false,
+      accessories: [] as AccessoryFormItem[],
+      maintenance: {
+        enabled: false,
+        type: 'routine' as const,
+        description: '',
+        cost: '',
+        operator: ''
+      }
+    };
+  };
   
-  const [formData, setFormData] = useState({
-    equipmentId: '',
-    checkDate: new Date().toISOString().split('T')[0],
-    expectedCount: '',
-    actualCount: '',
-    checker: '',
-    notes: '',
-    updateStock: false,
-    accessories: [] as AccessoryFormItem[],
-    maintenance: {
-      enabled: false,
-      type: 'routine' as const,
-      description: '',
-      cost: '',
-      operator: ''
-    }
-  });
+  const [formData, setFormData] = useState(getDefaultFormData());
+
+  const openModal = () => {
+    setFormData(getDefaultFormData());
+    setIsModalOpen(true);
+  };
 
   const equipmentMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -283,7 +296,7 @@ const InventoryList = () => {
         description="收纳盘点登记与状态追踪"
         actions={
           <button 
-            onClick={() => setIsModalOpen(true)}
+            onClick={openModal}
             className="btn-primary flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />

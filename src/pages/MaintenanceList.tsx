@@ -32,6 +32,18 @@ const MaintenanceList = () => {
     description: ''
   });
 
+  const openModal = () => {
+    setFormData({
+      equipmentId: selectedEquipmentId || '',
+      type: 'routine',
+      cost: '',
+      date: new Date().toISOString().split('T')[0],
+      operator: '',
+      description: ''
+    });
+    setIsModalOpen(true);
+  };
+
   const equipmentMap = useMemo(() => {
     const map: Record<string, string> = {};
     equipments.forEach(eq => {
@@ -140,7 +152,7 @@ const MaintenanceList = () => {
         description="维护记录管理与费用核算"
         actions={
           <button 
-            onClick={() => setIsModalOpen(true)}
+            onClick={openModal}
             className="btn-primary flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />

@@ -32,6 +32,17 @@ const AccessoryList = () => {
     notes: ''
   });
 
+  const openModal = () => {
+    setFormData({
+      equipmentId: selectedEquipmentId || '',
+      name: '',
+      type: 'missing',
+      reportedDate: new Date().toISOString().split('T')[0],
+      notes: ''
+    });
+    setIsModalOpen(true);
+  };
+
   const equipmentMap = useMemo(() => {
     const map: Record<string, string> = {};
     equipments.forEach(eq => {
@@ -121,7 +132,7 @@ const AccessoryList = () => {
         description="配件缺失、损坏登记与补充管理"
         actions={
           <button 
-            onClick={() => setIsModalOpen(true)}
+            onClick={openModal}
             className="btn-primary flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
